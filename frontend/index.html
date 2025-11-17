@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Party - Add Videos</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="guest-container">
+        <!-- Header -->
+        <header class="guest-header">
+            <h1>🎉 YouTube Party</h1>
+            <p>Add videos to the shared queue and enjoy together!</p>
+        </header>
+
+        <!-- Add Video Section -->
+        <section class="add-video-section">
+            <h2>Add a Video</h2>
+            <form id="add-video-form">
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="video-url"
+                        placeholder="Paste YouTube URL here..."
+                        autocomplete="off"
+                        required
+                    >
+                    <input
+                        type="text"
+                        id="user-name"
+                        placeholder="Your name (optional)"
+                        autocomplete="off"
+                        maxlength="30"
+                    >
+                    <button type="submit" id="add-button" class="btn">Add to Queue</button>
+                </div>
+            </form>
+            <div id="status-message" class="status-message" style="display: none;"></div>
+        </section>
+
+        <!-- Now Playing -->
+        <section id="now-playing" class="now-playing">
+            <div class="loading">Loading current video</div>
+        </section>
+
+        <!-- Queue Section -->
+        <section class="queue-section">
+            <h2>Coming Up Next (<span id="queue-count">0</span> videos)</h2>
+            <div id="queue-list" class="queue-list">
+                <div class="loading">Loading queue</div>
+            </div>
+        </section>
+
+        <!-- Footer Info -->
+        <footer style="text-align: center; padding: 40px 20px; color: var(--text-secondary);">
+            <p>Want to control playback? Open the <a href="/host" style="color: var(--primary-color); text-decoration: none;">host interface</a></p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
