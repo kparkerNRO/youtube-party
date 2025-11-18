@@ -4,7 +4,11 @@ Test script to verify YouTube Shorts URL parsing support
 """
 
 import sys
-sys.path.append('backend')
+from pathlib import Path
+
+# Add backend to path (two levels up from frontend/tests/)
+backend_path = Path(__file__).parent.parent.parent / 'backend'
+sys.path.insert(0, str(backend_path))
 
 from youtube_api import extract_video_id
 

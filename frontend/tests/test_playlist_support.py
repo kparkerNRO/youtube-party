@@ -2,7 +2,14 @@
 """
 Test script to verify playlist support
 """
+import sys
+from pathlib import Path
 import asyncio
+
+# Add project root to path (two levels up from frontend/tests/)
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
+
 from backend.youtube_api import (
     extract_playlist_id,
     is_playlist_url,
