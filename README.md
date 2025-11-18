@@ -17,8 +17,22 @@ A locally hosted web application for sharing YouTube videos with friends on the 
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
+- Node.js 18+ (for Vite dev server)
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- [just](https://github.com/casey/just) (optional, for convenient commands)
 - Modern web browser with JavaScript enabled
+
+**Installing just (optional but recommended):**
+```bash
+# macOS
+brew install just
+
+# Linux
+cargo install just
+
+# Or download from https://github.com/casey/just/releases
+```
 
 ### Installation
 
@@ -28,19 +42,57 @@ git clone https://github.com/yourusername/youtube-party.git
 cd youtube-party
 ```
 
-2. Install dependencies:
+2. Install backend dependencies:
 ```bash
-pip install -r requirements.txt
+# Using uv (recommended)
+uv sync
+
+# Or using pip
+pip install -e .
 ```
 
-3. Run the server:
+3. Install frontend dependencies:
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### Running the Application
+
+**Option 1: Using just (recommended)**
+```bash
+# Start both backend and frontend dev servers
+just dev
+
+# Or start individually
+just backend    # Start backend only
+just frontend   # Start frontend only
+```
+
+**Option 2: Manual start**
+```bash
+# Terminal 1 - Start backend
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2 - Start frontend (for development with HMR)
+cd frontend && npm run dev
+```
+
+**Option 3: Production mode (single server)**
 ```bash
 python backend/main.py
 ```
 
-4. Open your browser:
-   - **Guest Interface**: `http://YOUR_IP:8000`
-   - **Host Interface**: `http://YOUR_IP:8000/host`
+### Access the Application
+
+**Development mode (with Vite):**
+- **Guest Interface**: `http://localhost:3000`
+- **Host Interface**: `http://localhost:3000/host.html`
+
+**Production mode:**
+- **Guest Interface**: `http://YOUR_IP:8000`
+- **Host Interface**: `http://YOUR_IP:8000/host`
 
 The server will display your local IP address and access URLs when it starts.
 
@@ -103,14 +155,19 @@ youtube-party/
 ├── frontend/
 │   ├── index.html           # Guest interface
 │   ├── host.html            # Host interface (10-foot)
+│   ├── package.json         # Frontend dependencies
+│   ├── vite.config.js       # Vite configuration
 │   └── static/
 │       ├── css/
 │       │   └── styles.css   # Styling for both interfaces
 │       └── js/
 │           └── app.js       # Client-side logic
-├── requirements.txt         # Python dependencies
-├── .gitignore              # Git ignore rules
-└── README.md               # This file
+├── pyproject.toml           # Python dependencies (uv)
+├── uv.lock                  # Lockfile for reproducible builds
+├── justfile                 # Task runner commands
+├── CLAUDE.md                # Developer guidance for Claude Code
+├── .gitignore               # Git ignore rules
+└── README.md                # This file
 ```
 
 ## API Endpoints
@@ -178,22 +235,47 @@ The queue is automatically saved to `queue_state.json` and restored on server re
 
 ### Running in Development Mode
 
-```bash
-# Install development dependencies
-pip install -r requirements.txt
+The project uses Vite for frontend development with Hot Module Replacement (HMR) for faster iteration:
 
-# Run with auto-reload
+```bash
+# Using just (recommended)
+just dev
+
+# Or manually
+# Terminal 1: Backend
 uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+
+# Terminal 2: Frontend
+cd frontend && npm run dev
+```
+
+Access the app at `http://localhost:3000` (Vite proxies API requests to backend).
+
+### Available Just Commands
+
+```bash
+just --list              # Show all available commands
+just install            # Install all dependencies
+just dev                # Start both backend and frontend
+just backend            # Start backend only
+just frontend           # Start frontend only
+just clean              # Clean build artifacts and caches
+just format             # Format code
+just test               # Run tests
 ```
 
 ### Project Dependencies
 
+**Backend (Python):**
 - `fastapi` - Web framework
 - `uvicorn` - ASGI server
 - `websockets` - WebSocket support
 - `httpx` - HTTP client for YouTube API
 - `pydantic` - Data validation
 - `qrcode` - QR code generation
+
+**Frontend (Node.js):**
+- `vite` - Dev server with HMR
 
 ## Inspiration
 
