@@ -265,7 +265,17 @@ async function handleAddVideo(event) {
     addButton.textContent = 'Add to Queue';
 
     if (result.success) {
-        showStatus('Video added to queue!', 'success');
+        // Check if it's a playlist
+        if (result.data.playlist) {
+            const { added_count, skipped_count, total_count } = result.data;
+            let message = `Playlist added! ${added_count} video(s) added to queue`;
+            if (skipped_count > 0) {
+                message += ` (${skipped_count} already in queue)`;
+            }
+            showStatus(message, 'success');
+        } else {
+            showStatus('Video added to queue!', 'success');
+        }
         urlInput.value = '';
         urlInput.focus();
     } else {

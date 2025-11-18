@@ -10,7 +10,14 @@ import socket
 
 from backend.models import AddVideoRequest, QueueResponse, HostCommand, VideoItem
 from backend.queue_manager import QueueManager
-from backend.youtube_api import validate_video_url, extract_video_id
+from backend.youtube_api import (
+    validate_video_url,
+    extract_video_id,
+    is_playlist_url,
+    extract_playlist_id,
+    fetch_playlist_videos,
+    fetch_video_metadata
+)
 
 app = FastAPI(title="YouTube Party", version="1.0.0")
 
@@ -106,30 +113,81 @@ async def get_queue():
 
 @app.post("/api/queue")
 async def add_to_queue(request: AddVideoRequest):
-    """Add a video to the queue"""
-    # Validate and extract video information
-    is_valid, video_id, title, thumbnail = await validate_video_url(request.url)
+    """Add a video or playlist to the queue"""
 
-    if not is_valid or not video_id:
-        raise HTTPException(status_code=400, detail="Invalid YouTube URL or video not found")
+    # Check if this is a playlist URL
+    if is_playlist_url(request.url):
+        playlist_id = extract_playlist_id(request.url)
 
-    # Check for duplicates
-    if queue_manager.check_duplicate(video_id):
-        raise HTTPException(status_code=409, detail="Video already in queue")
+        if not playlist_id:
+            raise HTTPException(status_code=400, detail="Invalid playlist URL")
 
-    # Add to queue
-    video_item = queue_manager.add_video(
-        video_id=video_id,
-        url=request.url,
-        title=title,
-        thumbnail=thumbnail,
-        added_by=request.added_by
-    )
+        # Fetch all video IDs from the playlist
+        video_ids = await fetch_playlist_videos(playlist_id, max_videos=50)
 
-    # Broadcast update
-    await broadcast_queue_update()
+        if not video_ids:
+            raise HTTPException(status_code=400, detail="Could not fetch videos from playlist or playlist is empty")
 
-    return {"success": True, "video": video_item.model_dump(mode='json')}
+        # Add each video to the queue
+        added_videos = []
+        skipped_videos = []
+
+        for video_id in video_ids:
+            # Check for duplicates
+            if queue_manager.check_duplicate(video_id):
+                skipped_videos.append(video_id)
+                continue
+
+            # Fetch metadata for this video
+            title, thumbnail, _ = await fetch_video_metadata(video_id)
+
+            # Add to queue
+            video_item = queue_manager.add_video(
+                video_id=video_id,
+                url=f"https://www.youtube.com/watch?v={video_id}",
+                title=title,
+                thumbnail=thumbnail,
+                added_by=request.added_by
+            )
+            added_videos.append(video_item)
+
+        # Broadcast update
+        await broadcast_queue_update()
+
+        return {
+            "success": True,
+            "playlist": True,
+            "added_count": len(added_videos),
+            "skipped_count": len(skipped_videos),
+            "total_count": len(video_ids),
+            "videos": [v.model_dump(mode='json') for v in added_videos]
+        }
+
+    else:
+        # Original single video logic
+        # Validate and extract video information
+        is_valid, video_id, title, thumbnail = await validate_video_url(request.url)
+
+        if not is_valid or not video_id:
+            raise HTTPException(status_code=400, detail="Invalid YouTube URL or video not found")
+
+        # Check for duplicates
+        if queue_manager.check_duplicate(video_id):
+            raise HTTPException(status_code=409, detail="Video already in queue")
+
+        # Add to queue
+        video_item = queue_manager.add_video(
+            video_id=video_id,
+            url=request.url,
+            title=title,
+            thumbnail=thumbnail,
+            added_by=request.added_by
+        )
+
+        # Broadcast update
+        await broadcast_queue_update()
+
+        return {"success": True, "video": video_item.model_dump(mode='json')}
 
 
 @app.delete("/api/queue/{item_id}")
