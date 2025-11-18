@@ -242,7 +242,7 @@ body {
 
 /* ===== HOST INTERFACE (10-Foot/TV) ===== */
 .host-container {
-    height: 100vh;
+    min-height: 100vh;
     display: grid;
     grid-template-rows: auto 1fr auto;
     padding: 0;
@@ -271,7 +271,7 @@ body {
     grid-template-columns: 2fr 1fr;
     gap: 30px;
     padding: 40px 60px;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .player-section {

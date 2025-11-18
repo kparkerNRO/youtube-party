@@ -36,7 +36,28 @@ function connectWebSocket() {
 
 function handleWebSocketMessage(data) {
     if (data.type === 'queue_update') {
+        console.log('Queue update received:', data);
         updateQueueDisplay(data.queue, data.current_video);
+
+        // If this is the host page, handle video playback
+        if (player && playerReady) {
+            if (data.current_video) {
+                const newVideoId = data.current_video.video_id;
+                console.log('New video ID:', newVideoId, 'Current:', currentVideoId);
+
+                // Always load if video changed
+                if (newVideoId !== currentVideoId) {
+                    currentVideoId = newVideoId;
+                    console.log('Loading video:', newVideoId);
+                    loadVideo(newVideoId);
+                }
+            } else if (currentVideoId) {
+                // Queue is empty, stop the player
+                console.log('Queue empty, stopping player');
+                currentVideoId = null;
+                player.stopVideo();
+            }
+        }
     }
 }
 
@@ -267,22 +288,17 @@ async function handleSkip() {
         skipButton.textContent = 'Skipping...';
     }
 
+    console.log('Skipping current video');
     const result = await skipCurrent();
+    console.log('Skip result:', result);
 
     if (skipButton) {
         skipButton.disabled = false;
         skipButton.textContent = 'Skip Video';
     }
 
-    if (result.success && result.data.next_video) {
-        // Load next video in player
-        loadVideo(result.data.next_video.video_id);
-    } else {
-        // Queue is empty, stop player
-        if (window.player) {
-            window.player.stopVideo();
-        }
-    }
+    // WebSocket will handle loading the next video automatically
+    // No need to manually load it here
 }
 
 function showStatus(message, type) {
@@ -301,12 +317,12 @@ function showStatus(message, type) {
 // ===== YOUTUBE PLAYER (HOST ONLY) =====
 let player = null;
 let playerReady = false;
+let currentVideoId = null;
 
 function onYouTubeIframeAPIReady() {
     player = new YT.Player('player', {
         height: '100%',
         width: '100%',
-        videoId: '',
         playerVars: {
             autoplay: 1,
             controls: 1,
@@ -332,6 +348,7 @@ function onPlayerReady(event) {
             .then(res => res.json())
             .then(data => {
                 if (data.current_video) {
+                    currentVideoId = data.current_video.video_id;
                     loadVideo(data.current_video.video_id);
                 }
             });
@@ -347,6 +364,7 @@ function onPlayerStateChange(event) {
 
 function loadVideo(videoId) {
     if (player && playerReady) {
+        currentVideoId = videoId;
         player.loadVideoById(videoId);
     }
 }

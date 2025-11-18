@@ -37,6 +37,11 @@ class QueueManager:
         )
 
         self.queue.append(video_item)
+
+        # Auto-start first video if nothing is currently playing
+        if self.current_video is None and len(self.queue) == 1:
+            self.current_video = self.queue.pop(0)
+
         self.save_state()
         return video_item
 
@@ -128,6 +133,13 @@ class QueueManager:
                 self.queue = [VideoItem(**v) for v in state.get("queue", [])]
                 current = state.get("current_video")
                 self.current_video = VideoItem(**current) if current else None
+
+                # Auto-start first video if queue has videos but nothing is playing
+                if self.current_video is None and len(self.queue) > 0:
+                    self.current_video = self.queue.pop(0)
+                    self.save_state()
+                    print(f"Auto-started first video from queue")
+
                 print(f"Loaded queue state: {len(self.queue)} videos in queue")
         except Exception as e:
             print(f"Error loading queue state: {e}")
