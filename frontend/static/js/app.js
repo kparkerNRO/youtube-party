@@ -393,15 +393,42 @@ async function loadVideo(videoId) {
             throw new Error('Playable stream missing from response');
         }
 
-        attachStream(payload.stream_url);
-        console.log('Loaded stream using client', payload.client_name, payload.client_version);
+        attachStream(payload.stream_url, payload.stream_type);
+        console.log(
+            'Loaded stream using client',
+            payload.client_name,
+            payload.client_version,
+            `(${payload.stream_type || 'unknown'} stream)`,
+        );
     } catch (error) {
         console.error('Unable to start playback', error);
         showHostError(error.message || 'Unable to load video');
     }
 }
 
-function attachStream(streamUrl) {
+function attachStream(streamUrl, streamType = 'hls') {
+    if (!hostVideoElement) {
+        return;
+    }
+
+    const normalizedType = (streamType || '').toLowerCase();
+
+    if (normalizedType === 'dash') {
+        showHostError('DASH streams are not supported yet. Skipping to the next video.');
+        console.warn('Received DASH stream, skipping video', streamUrl);
+        playNext();
+        return;
+    }
+
+    if (isProgressiveStream(normalizedType, streamUrl)) {
+        attachProgressiveStream(streamUrl);
+        return;
+    }
+
+    attachHlsStream(streamUrl);
+}
+
+function attachHlsStream(streamUrl) {
     if (!hostVideoElement) {
         return;
     }
@@ -434,7 +461,10 @@ function attachStream(streamUrl) {
                 playNext();
             }
         });
-    } else if (hostVideoElement.canPlayType('application/vnd.apple.mpegurl')) {
+        return;
+    }
+
+    if (hostVideoElement.canPlayType('application/vnd.apple.mpegurl')) {
         hostVideoElement.src = streamUrl;
         hostVideoElement.addEventListener(
             'loadedmetadata',
@@ -443,9 +473,43 @@ function attachStream(streamUrl) {
             },
             { once: true },
         );
-    } else {
-        showHostError('HLS playback is not supported in this browser.');
+        return;
     }
+
+    showHostError('HLS playback is not supported in this browser.');
+}
+
+function attachProgressiveStream(streamUrl) {
+    if (!hostVideoElement) {
+        return;
+    }
+
+    if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+    }
+
+    hostVideoElement.src = streamUrl;
+    hostVideoElement.load();
+    hostVideoElement
+        .play()
+        .catch((error) => {
+            console.error('Autoplay blocked for progressive stream', error);
+            showHostError('Autoplay was blocked. Press play to continue.');
+        });
+}
+
+function isProgressiveStream(streamType, streamUrl) {
+    if (!streamUrl) {
+        return false;
+    }
+
+    if (streamType === 'progressive' || streamType === 'adaptive') {
+        return true;
+    }
+
+    const loweredUrl = streamUrl.toLowerCase();
+    return loweredUrl.includes('.mp4') || loweredUrl.includes('mime=video%2Fmp4');
 }
 
 function stopPlayback() {
