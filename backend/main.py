@@ -18,6 +18,7 @@ from backend.youtube_api import (
     fetch_playlist_videos,
     fetch_video_metadata
 )
+from backend.youtube_player import fetch_playable_stream, YouTubePlayabilityError
 
 app = FastAPI(title="YouTube Party", version="1.0.0")
 
@@ -200,6 +201,24 @@ async def remove_from_queue(item_id: str):
 
     await broadcast_queue_update()
     return {"success": True}
+
+
+@app.get("/api/player/{video_id}")
+async def get_playable_stream(video_id: str):
+    """Expose a playable stream for the host client using the youtubei API."""
+
+    normalized_id = extract_video_id(video_id) or video_id
+    if not normalized_id or len(normalized_id) != 11:
+        raise HTTPException(status_code=400, detail="Invalid YouTube video ID")
+
+    try:
+        stream = await fetch_playable_stream(normalized_id)
+    except YouTubePlayabilityError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception:
+        raise HTTPException(status_code=502, detail="Unable to fetch playable stream")
+
+    return stream
 
 
 @app.post("/api/queue/next")
