@@ -40,22 +40,16 @@ function handleWebSocketMessage(data) {
         updateQueueDisplay(data.queue, data.current_video);
 
         // If this is the host page, handle video playback
-        if (player && playerReady) {
+        if (playerReady && hostVideoElement) {
             if (data.current_video) {
                 const newVideoId = data.current_video.video_id;
-                console.log('New video ID:', newVideoId, 'Current:', currentVideoId);
-
-                // Always load if video changed
                 if (newVideoId !== currentVideoId) {
-                    currentVideoId = newVideoId;
-                    console.log('Loading video:', newVideoId);
+                    console.log('Loading playable stream for', newVideoId);
                     loadVideo(newVideoId);
                 }
             } else if (currentVideoId) {
-                // Queue is empty, stop the player
-                console.log('Queue empty, stopping player');
-                currentVideoId = null;
-                player.stopVideo();
+                console.log('Queue empty, stopping host player');
+                stopPlayback();
             }
         }
     }
@@ -186,6 +180,15 @@ function updateQueueDisplay(queue, currentVideo) {
                 <div class="video-title">Queue is empty</div>
                 <div class="added-by">Add videos to get started!</div>
             `;
+        }
+    }
+
+    const hostVideoEl = document.getElementById('host-video');
+    if (hostVideoEl) {
+        if (currentVideo && currentVideo.thumbnail) {
+            hostVideoEl.poster = currentVideo.thumbnail;
+        } else {
+            hostVideoEl.removeAttribute('poster');
         }
     }
 
@@ -324,59 +327,204 @@ function showStatus(message, type) {
     }
 }
 
-// ===== YOUTUBE PLAYER (HOST ONLY) =====
-let player = null;
+function showHostError(message) {
+    const currentInfoEl = document.getElementById('current-info');
+    if (currentInfoEl) {
+        currentInfoEl.innerHTML = `
+            <h2>Playback Error</h2>
+            <div class="video-title">${message}</div>
+            <div class="added-by">Try skipping to the next video.</div>
+        `;
+    }
+}
+
+// ===== HOST HLS PLAYER (HOST ONLY) =====
+let hostVideoElement = null;
+let hlsInstance = null;
 let playerReady = false;
 let currentVideoId = null;
 
-function onYouTubeIframeAPIReady() {
-    player = new YT.Player('player', {
-        height: '100%',
-        width: '100%',
-        playerVars: {
-            autoplay: 1,
-            controls: 1,
-            rel: 0,
-            modestbranding: 1,
-        },
-        events: {
-            onReady: onPlayerReady,
-            onStateChange: onPlayerStateChange,
-        },
-    });
+function initHostPlayer() {
+    hostVideoElement = document.getElementById('host-video');
+    if (!hostVideoElement) {
+        return;
+    }
 
-    window.player = player;
-}
-
-function onPlayerReady(event) {
-    console.log('YouTube player ready');
     playerReady = true;
 
-    // Load the current video if one exists
-    fetchQueue().then(() => {
-        fetch('/api/queue')
-            .then(res => res.json())
-            .then(data => {
-                if (data.current_video) {
-                    currentVideoId = data.current_video.video_id;
-                    loadVideo(data.current_video.video_id);
-                }
-            });
-    });
-}
-
-function onPlayerStateChange(event) {
-    // When video ends, automatically play next
-    if (event.data === YT.PlayerState.ENDED) {
+    hostVideoElement.addEventListener('ended', () => {
         playNext();
+    });
+
+    hostVideoElement.addEventListener('error', (event) => {
+        console.error('Playback error', event);
+        showHostError('Playback error. Trying the next video...');
+        playNext();
+    });
+
+    // Load whatever is currently playing
+    fetch('/api/queue')
+        .then((res) => res.json())
+        .then((data) => {
+            if (data.current_video) {
+                currentVideoId = data.current_video.video_id;
+                loadVideo(currentVideoId);
+            }
+        })
+        .catch((error) => console.error('Failed to hydrate host player', error));
+}
+
+async function loadVideo(videoId) {
+    if (!hostVideoElement || !playerReady) {
+        return;
+    }
+
+    currentVideoId = videoId;
+
+    try {
+        const response = await fetch(`/api/player/${videoId}`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+            throw new Error(payload.detail || 'Failed to fetch stream info');
+        }
+
+        if (!payload.stream_url) {
+            throw new Error('Playable stream missing from response');
+        }
+
+        attachStream(payload.stream_url, payload.stream_type);
+        console.log(
+            'Loaded stream using client',
+            payload.client_name,
+            payload.client_version,
+            `(${payload.stream_type || 'unknown'} stream)`,
+        );
+    } catch (error) {
+        console.error('Unable to start playback', error);
+        showHostError(error.message || 'Unable to load video');
     }
 }
 
-function loadVideo(videoId) {
-    if (player && playerReady) {
-        currentVideoId = videoId;
-        player.loadVideoById(videoId);
+function attachStream(streamUrl, streamType = 'hls') {
+    if (!hostVideoElement) {
+        return;
     }
+
+    const normalizedType = (streamType || '').toLowerCase();
+
+    if (normalizedType === 'dash') {
+        showHostError('DASH streams are not supported yet. Skipping to the next video.');
+        console.warn('Received DASH stream, skipping video', streamUrl);
+        playNext();
+        return;
+    }
+
+    if (isProgressiveStream(normalizedType, streamUrl)) {
+        attachProgressiveStream(streamUrl);
+        return;
+    }
+
+    attachHlsStream(streamUrl);
+}
+
+function attachHlsStream(streamUrl) {
+    if (!hostVideoElement) {
+        return;
+    }
+
+    if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+    }
+
+    if (window.Hls && window.Hls.isSupported()) {
+        hlsInstance = new Hls({ enableWorker: true });
+        hlsInstance.loadSource(streamUrl);
+        hlsInstance.attachMedia(hostVideoElement);
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+            hostVideoElement.play().catch((error) => console.error('Autoplay blocked', error));
+        });
+        hlsInstance.on(Hls.Events.ERROR, (_, data) => {
+            if (!data.fatal) {
+                return;
+            }
+
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                console.warn('HLS network error, retrying load');
+                hlsInstance.startLoad();
+            } else {
+                console.error('Fatal HLS error, destroying instance', data);
+                hlsInstance.destroy();
+                hlsInstance = null;
+                showHostError('Stream error. Skipping to next video.');
+                playNext();
+            }
+        });
+        return;
+    }
+
+    if (hostVideoElement.canPlayType('application/vnd.apple.mpegurl')) {
+        hostVideoElement.src = streamUrl;
+        hostVideoElement.addEventListener(
+            'loadedmetadata',
+            () => {
+                hostVideoElement.play().catch((error) => console.error('Autoplay blocked', error));
+            },
+            { once: true },
+        );
+        return;
+    }
+
+    showHostError('HLS playback is not supported in this browser.');
+}
+
+function attachProgressiveStream(streamUrl) {
+    if (!hostVideoElement) {
+        return;
+    }
+
+    if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+    }
+
+    hostVideoElement.src = streamUrl;
+    hostVideoElement.load();
+    hostVideoElement
+        .play()
+        .catch((error) => {
+            console.error('Autoplay blocked for progressive stream', error);
+            showHostError('Autoplay was blocked. Press play to continue.');
+        });
+}
+
+function isProgressiveStream(streamType, streamUrl) {
+    if (!streamUrl) {
+        return false;
+    }
+
+    if (streamType === 'progressive' || streamType === 'adaptive') {
+        return true;
+    }
+
+    const loweredUrl = streamUrl.toLowerCase();
+    return loweredUrl.includes('.mp4') || loweredUrl.includes('mime=video%2Fmp4');
+}
+
+function stopPlayback() {
+    if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+    }
+
+    if (hostVideoElement) {
+        hostVideoElement.pause();
+        hostVideoElement.removeAttribute('src');
+        hostVideoElement.load();
+    }
+
+    currentVideoId = null;
 }
 
 async function playNext() {
@@ -386,6 +534,7 @@ async function playNext() {
         loadVideo(result.data.video.video_id);
     } else {
         console.log('Queue is empty');
+        stopPlayback();
     }
 }
 
@@ -422,16 +571,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // If this is the host page, load YouTube API
-    if (document.getElementById('player')) {
-        const tag = document.createElement('script');
-        tag.src = 'https://www.youtube.com/iframe_api';
-        const firstScriptTag = document.getElementsByTagName('script')[0];
-        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    if (document.getElementById('host-video')) {
+        initHostPlayer();
     }
 });
 
 // Make functions globally available
 window.handleRemove = handleRemove;
 window.handleSkip = handleSkip;
-window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;

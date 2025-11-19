@@ -9,6 +9,7 @@ A locally hosted web application for sharing YouTube videos with friends on the 
 - 📱 **Mobile Friendly**: Guest interface works great on phones and tablets
 - 🔄 **Real-Time Updates**: WebSocket-powered live queue synchronization
 - 🎮 **Host Controls**: Skip videos, remove from queue, and manage playback
+- 🛰️ **Embed-Restriction Bypass**: Host playback calls YouTube's internal `youtubei` API and uses an HLS player so even "Playback on other websites disabled" videos keep working
 - 📊 **QR Code Access**: Easy mobile connection via QR code
 - 🚀 **Zero Configuration**: No API keys or external services required
 - 💾 **Queue Persistence**: Queue survives server restarts

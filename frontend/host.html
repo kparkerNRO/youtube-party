@@ -16,7 +16,9 @@
             <!-- Player Section -->
             <div class="player-section">
                 <!-- YouTube Player -->
-                <div id="player"></div>
+                <div id="player">
+                    <video id="host-video" controls autoplay muted playsinline poster="" preload="auto"></video>
+                </div>
 
                 <!-- Player Controls -->
                 <div class="player-controls">
@@ -56,6 +58,7 @@
         </footer>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js" integrity="sha256-5XU7EPxl6uNfIYg+aE0ixDzmbelo01FmeSWFubij8aI=" crossorigin="anonymous"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>
